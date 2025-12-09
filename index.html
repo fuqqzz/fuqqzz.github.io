@@ -459,6 +459,42 @@
             opacity: 0.6;
             font-size: 0.9em;
         }
+
+        /* Update Notification */
+        .update-notification {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(45deg, #8b0000, #dc143c);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(220, 20, 60, 0.8);
+            z-index: 10000;
+            display: none;
+            animation: slideUp 0.5s;
+            cursor: pointer;
+        }
+
+        .update-notification.show {
+            display: block;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateX(-50%) translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .update-notification:hover {
+            box-shadow: 0 0 40px rgba(220, 20, 60, 1);
+        }
     </style>
 </head>
 <body>
@@ -533,13 +569,21 @@
             
             <!-- Login Screen -->
             <div id="devLogin">
-                <h2 style="color: #dc143c; margin-bottom: 20px; text-align: center;">🔐 Acesso Restrito</h2>
+                <h2 style="color: #dc143c; margin-bottom: 20px; text-align: center;">🔐 Login de Desenvolvedor</h2>
+                
                 <div class="form-group">
-                    <label>Senha de Desenvolvedor:</label>
-                    <input type="password" id="devPassword" placeholder="Digite a senha" onkeypress="if(event.key==='Enter') loginDev()">
+                    <label>Email:</label>
+                    <input type="email" id="devEmail" placeholder="Digite seu email" onkeypress="if(event.key==='Enter') document.getElementById('devPassword').focus()">
                 </div>
-                <button class="btn" onclick="loginDev()" style="width: 100%;">Entrar</button>
+                
+                <div class="form-group">
+                    <label>Senha:</label>
+                    <input type="password" id="devPassword" placeholder="Digite sua senha" onkeypress="if(event.key==='Enter') loginDev()">
+                </div>
+                
+                <button class="btn" onclick="loginDev()" style="width: 100%;">🔓 Entrar</button>
                 <p style="text-align: center; margin-top: 15px; opacity: 0.6; font-size: 12px;">Área restrita ao administrador</p>
+                <p id="loginError" style="color: #ff4444; text-align: center; margin-top: 10px; display: none;"></p>
             </div>
 
             <!-- Dev Panel (hidden by default) -->
@@ -584,14 +628,14 @@
                         <input type="text" id="postVideo" placeholder="https://youtube.com/...">
                     </div>
 
-                    <button class="btn" onclick="addPost()" style="width: 100%;">➕ Adicionar Post</button>
+                <button class="btn" onclick="addPost()" style="width: 100%;">➕ Adicionar Post</button>
                 </div>
 
                 <!-- Tab: Videos -->
                 <div id="devVideosTab" class="dev-tab-content" style="display: none;">
                     <div class="form-group">
                         <label>🎬 Adicionar Vídeo do YouTube:</label>
-                        <input type="text" id="videoUrlInput" placeholder="Cole o link do vídeo do YouTube aqui">
+                        <input type="text" id="videoUrlInput" placeholder="Cole o link do vídeo do YouTube aqui" onkeypress="if(event.key==='Enter') addVideo()">
                         <button class="btn" onclick="addVideo()" style="margin-top: 10px; width: 100%;">➕ Adicionar Vídeo</button>
                         <p style="margin-top: 10px; opacity: 0.7; font-size: 0.9em;">
                             💡 Dica: Cole o link completo do vídeo do YouTube (ex: https://www.youtube.com/watch?v=...)
@@ -599,7 +643,7 @@
                     </div>
 
                     <div style="margin-top: 30px;">
-                        <label style="color: #dc143c; font-weight: bold; display: block; margin-bottom: 15px;">📹 Vídeos Cadastrados:</label>
+                        <label style="color: #dc143c; font-weight: bold; display: block; margin-bottom: 15px;">📹 Vídeos Cadastrados (<span id="videoCount">0</span>):</label>
                         <div id="devVideosList"></div>
                     </div>
 
@@ -686,7 +730,40 @@
         </div>
     </div>
 
+    <!-- Update Notification -->
+    <div class="update-notification" id="updateNotification" onclick="reloadPage()">
+        <strong>🔄 Nova atualização disponível!</strong><br>
+        <span style="font-size: 0.9em;">Clique aqui para recarregar a página</span>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
     <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsTjLOMVMDr4fBNvJFr7wHO_sn9ewlfoQ",
+            authDomain: "fuqqzz.firebaseapp.com",
+            projectId: "fuqqzz",
+            storageBucket: "fuqqzz.firebasestorage.app",
+            messagingSenderId: "137501562450",
+            appId: "1:137501562450:web:d06e3f17812b38faacf18b"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        // Check authentication state
+        let currentUser = null;
+        auth.onAuthStateChanged((user) => {
+            currentUser = user;
+            console.log('Auth state changed:', user ? user.email : 'Not logged in');
+        });
+        // Local data (fallback)
         let posts = JSON.parse(localStorage.getItem('fuqqzzPosts') || '[]');
         let videos = JSON.parse(localStorage.getItem('fuqqzzVideos') || '[]');
         let keyLink = localStorage.getItem('fuqqzzKeyLink') || 'SEU_LINK_ENCURTADOR_AQUI';
@@ -694,8 +771,135 @@
         let keyMessage = localStorage.getItem('fuqqzzKeyMessage') || 'Em Breve! 🔜\n\nAguarde novidades no canal.\nSe inscreva para não perder nenhuma atualização!';
         let channelLink = localStorage.getItem('fuqqzzChannelLink') || 'https://www.youtube.com/@fuqqzz';
         let aboutText = localStorage.getItem('fuqqzzAboutText') || 'Bem-vindo ao FUQQZZ! 🔥\n\nAqui você encontra os melhores scripts e executores para Roblox.\nNão se esqueça de se inscrever no canal para não perder nenhuma novidade!';
-        const DEV_PASSWORD = '#z4x5c67'; // MUDE ESTA SENHA!
+        const DEV_PASSWORD = '#z4x5c67';
         let editingPostId = null;
+
+        // Firebase Real-time Sync
+        let isLoadingFromFirebase = false;
+
+        // Load data from Firebase
+        function loadFromFirebase() {
+            isLoadingFromFirebase = true;
+
+            // Load posts
+            db.collection('posts').orderBy('id', 'desc').onSnapshot((snapshot) => {
+                if (isLoadingFromFirebase) {
+                    posts = [];
+                    snapshot.forEach((doc) => {
+                        posts.push(doc.data());
+                    });
+                    localStorage.setItem('fuqqzzPosts', JSON.stringify(posts));
+                    renderPosts();
+                    updateStats();
+                }
+            });
+
+            // Load videos
+            db.collection('videos').orderBy('addedDate', 'desc').onSnapshot((snapshot) => {
+                if (isLoadingFromFirebase) {
+                    videos = [];
+                    snapshot.forEach((doc) => {
+                        videos.push(doc.data());
+                    });
+                    localStorage.setItem('fuqqzzVideos', JSON.stringify(videos));
+                    renderVideos();
+                }
+            });
+
+            // Load settings
+            db.collection('settings').doc('config').onSnapshot((doc) => {
+                if (doc.exists && isLoadingFromFirebase) {
+                    const data = doc.data();
+                    if (data.keyLink) keyLink = data.keyLink;
+                    if (data.keyMode) keyMode = data.keyMode;
+                    if (data.keyMessage) keyMessage = data.keyMessage;
+                    if (data.channelLink) channelLink = data.channelLink;
+                    if (data.aboutText) aboutText = data.aboutText;
+                    
+                    localStorage.setItem('fuqqzzKeyLink', keyLink);
+                    localStorage.setItem('fuqqzzKeyMode', keyMode);
+                    localStorage.setItem('fuqqzzKeyMessage', keyMessage);
+                    localStorage.setItem('fuqqzzChannelLink', channelLink);
+                    localStorage.setItem('fuqqzzAboutText', aboutText);
+                    
+                    updateKeyButton();
+                    updateChannelInfo();
+                }
+            });
+        }
+
+        // Save to Firebase
+        function saveToFirebase(collection, data, docId = null) {
+            if (docId) {
+                return db.collection(collection).doc(docId).set(data);
+            } else {
+                return db.collection(collection).add(data);
+            }
+        }
+
+        // Delete from Firebase
+        function deleteFromFirebase(collection, docId) {
+            return db.collection(collection).doc(docId).delete();
+        }
+
+        // Sync posts to Firebase
+        async function syncPostsToFirebase() {
+            const batch = db.batch();
+            const snapshot = await db.collection('posts').get();
+            snapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+
+            for (const post of posts) {
+                await db.collection('posts').doc(post.id.toString()).set(post);
+            }
+        }
+
+        // Sync videos to Firebase
+        async function syncVideosToFirebase() {
+            const batch = db.batch();
+            const snapshot = await db.collection('videos').get();
+            snapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+
+            for (const video of videos) {
+                await db.collection('videos').doc(video.id).set(video);
+            }
+        }
+
+        // Sync settings to Firebase
+        function syncSettingsToFirebase() {
+            return db.collection('settings').doc('config').set({
+                keyLink: keyLink,
+                keyMode: keyMode,
+                keyMessage: keyMessage,
+                channelLink: channelLink,
+                aboutText: aboutText
+            });
+        }
+
+        // Live Update System (fallback for localStorage)
+        let lastUpdateTime = localStorage.getItem('fuqqzzLastUpdate') || Date.now().toString();
+
+        setInterval(() => {
+            const currentUpdateTime = localStorage.getItem('fuqqzzLastUpdate');
+            if (currentUpdateTime && currentUpdateTime !== lastUpdateTime) {
+                lastUpdateTime = currentUpdateTime;
+            }
+        }, 2000);
+
+        function reloadPage() {
+            location.reload();
+        }
+
+        function triggerUpdate() {
+            localStorage.setItem('fuqqzzLastUpdate', Date.now().toString());
+        }
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'fuqqzzLastUpdate') {
+                // Firebase handles updates automatically
+            }
+        });
 
         // Atalho secreto: Ctrl + Shift + D
         document.addEventListener('keydown', (e) => {
@@ -708,31 +912,85 @@
         });
 
         function checkDevAccess() {
-            document.getElementById('devModal').classList.add('active');
-            document.getElementById('devLogin').style.display = 'block';
-            document.getElementById('devPanel').style.display = 'none';
-            document.getElementById('devPassword').value = '';
-            document.getElementById('devPassword').focus();
-        }
-
-        function loginDev() {
-            const password = document.getElementById('devPassword').value;
-            if (password === DEV_PASSWORD) {
+            if (!currentUser) {
+                document.getElementById('devModal').classList.add('active');
+                document.getElementById('devLogin').style.display = 'block';
+                document.getElementById('devPanel').style.display = 'none';
+                document.getElementById('devEmail').value = '';
+                document.getElementById('devPassword').value = '';
+                document.getElementById('loginError').style.display = 'none';
+                document.getElementById('devEmail').focus();
+            } else {
+                // Already logged in
+                document.getElementById('devModal').classList.add('active');
                 document.getElementById('devLogin').style.display = 'none';
                 document.getElementById('devPanel').style.display = 'block';
-                sessionStorage.setItem('devLoggedIn', 'true');
                 showDevTab('add');
                 updateStats();
                 loadSettings();
-            } else {
-                alert('Senha incorreta!');
-                document.getElementById('devPassword').value = '';
             }
         }
 
+        function loginDev() {
+            const email = document.getElementById('devEmail').value;
+            const password = document.getElementById('devPassword').value;
+            const errorElement = document.getElementById('loginError');
+
+            if (!email || !password) {
+                errorElement.textContent = 'Preencha email e senha!';
+                errorElement.style.display = 'block';
+                return;
+            }
+
+            // Show loading
+            errorElement.style.display = 'none';
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Entrando...';
+            btn.disabled = true;
+
+            auth.signInWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    // Signed in
+                    document.getElementById('devLogin').style.display = 'none';
+                    document.getElementById('devPanel').style.display = 'block';
+                    sessionStorage.setItem('devLoggedIn', 'true');
+                    showDevTab('add');
+                    updateStats();
+                    loadSettings();
+                    console.log('Login successful:', userCredential.user.email);
+                })
+                .catch((error) => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                    console.error('Login error:', error);
+                    
+                    let errorMsg = 'Erro ao fazer login!';
+                    if (error.code === 'auth/user-not-found') {
+                        errorMsg = 'Usuário não encontrado!';
+                    } else if (error.code === 'auth/wrong-password') {
+                        errorMsg = 'Senha incorreta!';
+                    } else if (error.code === 'auth/invalid-email') {
+                        errorMsg = 'Email inválido!';
+                    } else if (error.code === 'auth/too-many-requests') {
+                        errorMsg = 'Muitas tentativas! Tente novamente mais tarde.';
+                    }
+                    
+                    errorElement.textContent = errorMsg;
+                    errorElement.style.display = 'block';
+                });
+        }
+
         function logout() {
-            sessionStorage.removeItem('devLoggedIn');
-            closeDevPanel();
+            if (confirm('Deseja sair do painel?')) {
+                auth.signOut().then(() => {
+                    sessionStorage.removeItem('devLoggedIn');
+                    closeDevPanel();
+                    console.log('Logout successful');
+                }).catch((error) => {
+                    console.error('Logout error:', error);
+                });
+            }
         }
 
         function closeDevPanel() {
@@ -774,6 +1032,11 @@
         }
 
         function addPost() {
+            if (!currentUser) {
+                alert('Você precisa estar logado para adicionar posts!');
+                return;
+            }
+
             const type = document.getElementById('postType').value;
             const name = document.getElementById('postName').value;
             const emoji = document.getElementById('postEmoji').value;
@@ -782,7 +1045,7 @@
             const video = document.getElementById('postVideo').value;
 
             if (!name || !desc || !code) {
-                alert('Preencha todos os campos obrigatórios!');
+                alert('Preencha todos os campos obrigatórios (Nome, Descrição e Código/Link)!');
                 return;
             }
 
@@ -801,7 +1064,7 @@
                     };
                 }
                 editingPostId = null;
-                alert('Post editado com sucesso!');
+                alert('✅ Post editado com sucesso!');
             } else {
                 // Add new post
                 const post = {
@@ -814,10 +1077,11 @@
                     video: video
                 };
                 posts.push(post);
-                alert('Post adicionado com sucesso!');
+                alert('✅ Post adicionado com sucesso!');
             }
 
             localStorage.setItem('fuqqzzPosts', JSON.stringify(posts));
+            syncPostsToFirebase();
             
             document.getElementById('postName').value = '';
             document.getElementById('postEmoji').value = '';
@@ -827,6 +1091,7 @@
             
             renderPosts();
             updateStats();
+            triggerUpdate();
         }
 
         function editPost(id) {
@@ -849,9 +1114,11 @@
             if (confirm('Deseja realmente deletar este post?')) {
                 posts = posts.filter(p => p.id !== id);
                 localStorage.setItem('fuqqzzPosts', JSON.stringify(posts));
+                syncPostsToFirebase();
                 renderPosts();
                 renderManagePosts();
                 updateStats();
+                triggerUpdate();
             }
         }
 
@@ -860,9 +1127,11 @@
                 if (confirm('Última confirmação! Todos os ' + posts.length + ' posts serão deletados permanentemente!')) {
                     posts = [];
                     localStorage.setItem('fuqqzzPosts', JSON.stringify(posts));
+                    syncPostsToFirebase();
                     renderPosts();
                     renderManagePosts();
                     updateStats();
+                    triggerUpdate();
                     alert('Todos os posts foram deletados!');
                 }
             }
@@ -923,8 +1192,10 @@
             keyMode = 'message';
             localStorage.setItem('fuqqzzKeyMessage', message);
             localStorage.setItem('fuqqzzKeyMode', 'message');
-            alert('Mensagem salva com sucesso!');
             updateKeyButton();
+            syncSettingsToFirebase();
+            triggerUpdate();
+            alert('Mensagem salva com sucesso!');
         }
 
         function saveKeyLink() {
@@ -937,8 +1208,10 @@
             keyMode = 'link';
             localStorage.setItem('fuqqzzKeyLink', link);
             localStorage.setItem('fuqqzzKeyMode', 'link');
-            alert('Link da key salvo com sucesso!');
             updateKeyButton();
+            syncSettingsToFirebase();
+            triggerUpdate();
+            alert('Link da key salvo com sucesso!');
         }
 
         function saveChannelLink() {
@@ -950,6 +1223,8 @@
             channelLink = link;
             localStorage.setItem('fuqqzzChannelLink', link);
             updateChannelInfo();
+            syncSettingsToFirebase();
+            triggerUpdate();
             alert('Link do canal salvo com sucesso!');
         }
 
@@ -962,6 +1237,8 @@
             aboutText = text;
             localStorage.setItem('fuqqzzAboutText', text);
             updateChannelInfo();
+            syncSettingsToFirebase();
+            triggerUpdate();
             alert('Descrição do canal salva com sucesso!');
         }
 
@@ -1092,6 +1369,11 @@
         }
 
         function addVideo() {
+            if (!currentUser) {
+                alert('Você precisa estar logado para adicionar vídeos!');
+                return;
+            }
+
             const url = document.getElementById('videoUrlInput').value.trim();
             if (!url) {
                 alert('Cole o link do vídeo!');
@@ -1100,13 +1382,13 @@
 
             const videoId = getYouTubeVideoId(url);
             if (!videoId) {
-                alert('Link inválido! Use um link do YouTube válido.');
+                alert('❌ Link inválido! Use um link do YouTube válido.');
                 return;
             }
 
             // Check if video already exists
             if (videos.some(v => v.id === videoId)) {
-                alert('Este vídeo já foi adicionado!');
+                alert('⚠️ Este vídeo já foi adicionado!');
                 return;
             }
 
@@ -1119,19 +1401,23 @@
 
             videos.unshift(video); // Add to beginning
             localStorage.setItem('fuqqzzVideos', JSON.stringify(videos));
+            syncVideosToFirebase();
             
             document.getElementById('videoUrlInput').value = '';
             renderVideos();
             renderDevVideos();
-            alert('Vídeo adicionado com sucesso!');
+            triggerUpdate();
+            alert('✅ Vídeo adicionado com sucesso!');
         }
 
         function deleteVideo(videoId) {
             if (confirm('Deseja deletar este vídeo?')) {
                 videos = videos.filter(v => v.id !== videoId);
                 localStorage.setItem('fuqqzzVideos', JSON.stringify(videos));
+                syncVideosToFirebase();
                 renderVideos();
                 renderDevVideos();
+                triggerUpdate();
             }
         }
 
@@ -1140,8 +1426,10 @@
                 if (confirm('Última confirmação! Todos os ' + videos.length + ' vídeos serão deletados!')) {
                     videos = [];
                     localStorage.setItem('fuqqzzVideos', JSON.stringify(videos));
+                    syncVideosToFirebase();
                     renderVideos();
                     renderDevVideos();
+                    triggerUpdate();
                     alert('Todos os vídeos foram deletados!');
                 }
             }
@@ -1166,12 +1454,14 @@
 
         function renderDevVideos() {
             const list = document.getElementById('devVideosList');
+            document.getElementById('videoCount').textContent = videos.length;
+            
             if (videos.length === 0) {
                 list.innerHTML = '<p style="text-align: center; opacity: 0.6;">Nenhum vídeo cadastrado</p>';
             } else {
                 list.innerHTML = videos.map(v => `
                     <div class="manage-post-item">
-                        <img src="${v.thumbnail}" style="width: 100%; border-radius: 8px; margin-bottom: 10px;" onerror="this.src='https://img.youtube.com/vi/${v.id}/hqdefault.jpg'">
+                        <img src="${v.thumbnail}" style="width: 100%; border-radius: 8px; margin-bottom: 10px;" onerror="this.src='https://img.youtube.com/vi/${v.id}/hqdefault.jpg'" alt="Thumbnail">
                         <p style="opacity: 0.8;">📅 Adicionado em: ${new Date(v.addedDate).toLocaleDateString('pt-BR')}</p>
                         <p style="opacity: 0.6; font-size: 12px; word-break: break-all; margin-top: 5px;">${v.url}</p>
                         <div style="margin-top: 10px;">
@@ -1226,6 +1516,7 @@
         }
 
         // Initial render
+        loadFromFirebase(); // Load from Firebase first
         renderPosts();
         renderVideos();
         updateKeyButton();
